@@ -35,7 +35,7 @@ class SysPay extends PaymentModule {
 	{
 		$this->name = 'syspay';
 		$this->tab = 'payments_gateways';
-		$this->version = '2.0.1';
+		$this->version = '2.0.2';
 		$this->author = 'SysPay';
 
 		parent::__construct();
