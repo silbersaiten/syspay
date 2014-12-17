@@ -37,6 +37,7 @@ class SysPay extends PaymentModule {
 		$this->tab = 'payments_gateways';
 		$this->version = '2.0.2';
 		$this->author = 'SysPay';
+		$this->is_eu_compatible = 1;
 
 		parent::__construct();
 
@@ -63,6 +64,7 @@ class SysPay extends PaymentModule {
 
 		return (parent::install() &&
 			$this->registerHook('payment') &&
+			$this->registerHook('displayPaymentEU') &&
 			$this->registerHook('orderConfirmation') &&
 			$this->registerHook('adminOrder') &&
 			$this->registerHook('updateOrderStatus') && SyspayInstallTools::setRestrictions($this->id));
@@ -302,6 +304,90 @@ class SysPay extends PaymentModule {
 			return $this->display(__FILE__, '/views/templates/hook/syspay.tpl');
 		else
 			return $this->display(__FILE__, '/views/templates/hook/syspay-14.tpl');
+	}
+	
+	public function hookDisplayPaymentEU($params) {
+		require_once(dirname(__FILE__).'/tools/loader.php');
+		require_once(dirname(__FILE__).'/tools/syspay_tools.php');
+
+		$technical_checks = array();
+		$technical_checks['curl'] = (extension_loaded('curl') ? 'ok':'ko');
+		$technical_checks['json'] = (extension_loaded('json') ? 'ok':'ko');
+		$technical_checks['php']  = (version_compare(PHP_VERSION, '5.2', '>') ? 'ok':'ko');
+		$mode = Configuration::get('SYSPAY_MODE');
+		$test = (Configuration::get('SYSPAY_TEST_MID') != null && Configuration::get('SYSPAY_TEST_SHA1_PRIVATE') != null ? 1:0);
+		$live = (Configuration::get('SYSPAY_LIVE_MID') != null && Configuration::get('SYSPAY_LIVE_SHA1_PRIVATE') != null ? 1:0);
+		if (($mode == 0 && $test == 1) || ($mode == 1 && $live == 1))
+			$technical_checks['settings'] = 'ok';
+		else
+			$technical_checks['settings'] = 'ko';
+
+		if (in_array('ko', $technical_checks))
+			return;
+		$payment_params = $this->getPaymentParams($params);
+
+		if (Configuration::get('SYSPAY_REBILL') == 1)
+		{
+			$card = SyspayTools::getRebillCardsByIdCustomer($this->context->customer->id);
+			if ($card)
+				$this->context->smarty->assign('card', $card);
+		}
+
+		if (Tools::getValue('err') && Tools::getValue('err') == 1)
+		   $this->context->smarty->assign('err', '1');
+
+		$this->context->smarty->assign(array(
+			'syspay_params'				=> $payment_params,
+			'SYSPAY_AUTHORIZED_PAYMENT' => Configuration::get('SYSPAY_AUTHORIZED_PAYMENT'),
+			'SYSPAY_REBILL'			 => Configuration::get('SYSPAY_REBILL'),
+			'syspay_link'				=> _MODULE_DIR_.'syspay/syspay-form.php',
+			'restrictedIP'				=> ((Configuration::get('PS_SHOP_ENABLED') == 0 && in_array($_SERVER['REMOTE_ADDR'],
+				explode(',', Configuration::get('PS_MAINTENANCE_IP')))) || Configuration::get('PS_SHOP_ENABLED') == 1 ? true : false)
+		));
+		
+		if ($this->context->getMobileDevice() != false) {
+			$tpl = 'syspay_eu.tpl';
+		}
+		else if (version_compare(_PS_VERSION_, '1.6', '>=')) {
+			$tpl = 'syspay-16_eu.tpl';
+		}
+		else if (version_compare(_PS_VERSION_, '1.5', '>=')) {
+			$tpl = 'syspay_eu.tpl';
+		}
+		else {
+			$tpl = 'syspay-14_eu.tpl';
+		}
+
+		return array(
+			'cta_text' => $this->l('SysPay'),
+			'logo' => $this->_path . 'img/button.png',
+			'form' => $this->fetchTemplate($tpl)
+		);
+	}
+	
+	public function fetchTemplate($name)
+	{
+		if (version_compare(_PS_VERSION_, '1.4', '<')) {
+			$this->context->smarty->currentTemplate = $name;
+		}
+		elseif (version_compare(_PS_VERSION_, '1.5', '<')) {
+			$views = 'views/templates/';
+			
+			if (@filemtime(dirname(__FILE__).'/'.$name)) {
+				return $this->display(__FILE__, $name);
+			}
+			elseif (@filemtime(dirname(__FILE__).'/'.$views.'hook/'.$name)) {
+				return $this->display(__FILE__, $views.'hook/'.$name);
+			}
+			elseif (@filemtime(dirname(__FILE__).'/'.$views.'front/'.$name)) {
+				return $this->display(__FILE__, $views.'front/'.$name);
+			}
+			elseif (@filemtime(dirname(__FILE__).'/'.$views.'admin/'.$name)) {
+				return $this->display(__FILE__, $views.'admin/'.$name);
+			}
+		}
+
+		return $this->display(__FILE__, $name);
 	}
 
 	public function hookOrderConfirmation($params)
