@@ -307,43 +307,8 @@ class SysPay extends PaymentModule {
 	}
 	
 	public function hookDisplayPaymentEU($params) {
-		require_once(dirname(__FILE__).'/tools/loader.php');
-		require_once(dirname(__FILE__).'/tools/syspay_tools.php');
-
-		$technical_checks = array();
-		$technical_checks['curl'] = (extension_loaded('curl') ? 'ok':'ko');
-		$technical_checks['json'] = (extension_loaded('json') ? 'ok':'ko');
-		$technical_checks['php']  = (version_compare(PHP_VERSION, '5.2', '>') ? 'ok':'ko');
-		$mode = Configuration::get('SYSPAY_MODE');
-		$test = (Configuration::get('SYSPAY_TEST_MID') != null && Configuration::get('SYSPAY_TEST_SHA1_PRIVATE') != null ? 1:0);
-		$live = (Configuration::get('SYSPAY_LIVE_MID') != null && Configuration::get('SYSPAY_LIVE_SHA1_PRIVATE') != null ? 1:0);
-		if (($mode == 0 && $test == 1) || ($mode == 1 && $live == 1))
-			$technical_checks['settings'] = 'ok';
-		else
-			$technical_checks['settings'] = 'ko';
-
-		if (in_array('ko', $technical_checks))
-			return;
-		$payment_params = $this->getPaymentParams($params);
-
-		if (Configuration::get('SYSPAY_REBILL') == 1)
-		{
-			$card = SyspayTools::getRebillCardsByIdCustomer($this->context->customer->id);
-			if ($card)
-				$this->context->smarty->assign('card', $card);
-		}
-
-		if (Tools::getValue('err') && Tools::getValue('err') == 1)
-		   $this->context->smarty->assign('err', '1');
-
-		$this->context->smarty->assign(array(
-			'syspay_params'				=> $payment_params,
-			'SYSPAY_AUTHORIZED_PAYMENT' => Configuration::get('SYSPAY_AUTHORIZED_PAYMENT'),
-			'SYSPAY_REBILL'			 => Configuration::get('SYSPAY_REBILL'),
-			'syspay_link'				=> _MODULE_DIR_.'syspay/syspay-form.php',
-			'restrictedIP'				=> ((Configuration::get('PS_SHOP_ENABLED') == 0 && in_array($_SERVER['REMOTE_ADDR'],
-				explode(',', Configuration::get('PS_MAINTENANCE_IP')))) || Configuration::get('PS_SHOP_ENABLED') == 1 ? true : false)
-		));
+        if ($this->hookPayment($params) == '')
+            return '';
 		
 		if ($this->context->getMobileDevice() != false) {
 			$tpl = 'syspay_eu.tpl';
